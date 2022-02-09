@@ -6,7 +6,7 @@ These scripts will allow you to easily gather statistics and configuration from 
 
 These scripts were tested using a raspberry-pi 2b running raspberrypi 5.10.92-v7+ #1514
 
-![picture of dashboard](https://github.com/sdsolomo/blob/growatt-x000ES/README.jpg?raw=true)
+![picture of dashboard](https://github.com/sdsolomo/blob/growatt-x000ES/README.png?raw=true)
 
 
 Installation instructions (assuming you have a working pi w/ 5.10.92-v7+ or newer w/ internet access)
