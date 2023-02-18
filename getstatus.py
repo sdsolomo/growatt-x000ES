@@ -15,16 +15,16 @@ influxuser = "None"
 influxpass = "None"
 influxmeasurement = "inverter"
 
-interval = 60
+interval = 10
 
 numinverters = 1
-inverterusbport1 = "/dev/ttyUSB0"
+inverterusbport1 = "/dev/ttyUSB1"
 #not sure yet if the inverters will allow me to poll them over a single usb connection or not
-inverterusbport2 = "/dev/ttyUSB1"
-inverterusbport3 = "/dev/ttyUSB2"
+#inverterusbport2 = "/dev/ttyUSB1"
+#inverterusbport3 = "/dev/ttyUSB2"
 
-verbose = 0
-gwverbose = 0
+verbose = 1
+gwverbose = 1
 gwinfodump = 1
 
 # Codes
@@ -62,22 +62,29 @@ class Growatt:
             raise row
         self.modbusVersion = row.registers[0]
 
+
+    def returnsignedval(self, hibyte, lobyte, intlen = 16):
+        uint16_t = (hibyte & 0xff)
+        uint16_t = uint16_t << (intlen / 2)
+        unsigned - 2**intlen if unsigned >= 2**(intlen-1) else unsigned 
+
     def read(self):
+        intlen = 16
         row = self.client.read_input_registers(0, 83, unit=self.unit)
+        totbattwatts = row.registers[77] & row.registers[78]
+        unsigned = totbattwatts % 2**intlen
+
         if gwverbose: print("GWVERBOSE2")
-        if gwverbose: print("GWVERBOSE3")
+        if gwverbose: 
+                print("BattWatt: Highbyte:", type(row.registers[77]), "value:", row.registers[77], "Lobyte:", type(row.registers[78]), "value:", row.registers[78])
         info = {                                    # ==================================================================
             "Module": unit,
             "StatusCode": row.registers[0],         # N/A,      Inverter Status,    Inverter run state
             "Status": StatusCodes[row.registers[0]],
             "Vpv1": float(row.registers[1]) / 10,               # 0.1V,     PV1 voltage
-            "Vpv2": float(row.registers[2]) / 10,               # 0.1V,     PV2 voltage
             "Ppv1H": float(row.registers[3]) / 10,              # 0.1W,     PV1 Charge power (high)
             "Ppv1L": float(row.registers[4]) / 10,              # 0.1W,     PV1 Charge power (low) 
-            "Ppv2H": float(row.registers[5]) / 10,              # 0.1W,     PV2 Charge power (high)
-            "Ppv2L": float(row.registers[6]) / 10,              # 0.1W,     PV2 Charge power (low)
             "Buck1Curr": float(row.registers[7]) / 10,          # 0.1A,     Buck1 current
-            "Buck2Curr": float(row.registers[8]) / 10,          # 0.1A,     Buck2 current
             "OP_WattH": float(row.registers[9]) / 10,           # 0.1W,     Output active power (high)
             "OP_WattL": float(row.registers[10]) / 10,          # 0.1W,     Output active power (low)
             "OP_VAH": float(row.registers[11]) / 10,            # 0.1VA     Output apparent power (high)
@@ -121,10 +128,6 @@ class Growatt:
             "Epv1_todayL": float(row.registers[49]) / 10,       # 0.1kWh,   Energy today l,     Today generate energy (low)
             "Epv1_totalH": float(row.registers[50]) / 10,       # 0.1kWh,   Energy total H,     generate energy total (high)
             "Epv1_totalL": float(row.registers[51]) / 10,       # 0.1kWh,   Energy total l,     generate energy total (low)
-            "Epv2_todayH": float(row.registers[52]) / 10,       # 0.1kWh,   Energy today H,     Today generate energy (high)
-            "Epv2_todayL": float(row.registers[53]) / 10,       # 0.1kWh,   Energy today l,     Today generate energy (low)
-            "Epv2_totalH": float(row.registers[54]) / 10,       # 0.1kWh,   Energy total H,     generate energy total (high)
-            "Epv2_totalL": float(row.registers[55]) / 10,       # 0.1kWh,   Energy total l,     generate energy total (low)
             "Eac_chrtodayH": float(row.registers[56]) / 10,     # 0.1kWh,   AC charge Energy Today (high)
             "Eac_chrtodayL": float(row.registers[57]) / 10,     # 0.1kWh,   AC charge Energy Todat (low)
             "Eac_chrtotalH": float(row.registers[58]) / 10,     # 0.1kWh,   AC charge Energy Total (high)
@@ -146,34 +149,16 @@ class Growatt:
             "Bat_dischrwattL": float(row.registers[74]) / 10,   # 0.1W      Bat discharge watts (low)
             "Bat_dischrvaH": float(row.registers[75]) / 10,     # 0.1VA     Bat discharge va (high)
             "Bat_dischrvaL": float(row.registers[76]) / 10,     # 0.1VA     Bat discharge va (low)
-            "Bat_wattH": float(row.registers[77]) / 10,         # 0.1W      Signed int positive discharge, negative battery charge power
-            "Bat_wattL": float(row.registers[78]) / 10,         # 0.1W      Signed int positive discharge, negative battery charge power
+            #"Bat_wattH": float(row.registers[77]) / 10,         # 0.1W      Signed int positive discharge, negative battery charge power
+            "Bat_wattL": float(unsigned - 2**intlen if unsigned >= 2**(intlen-1) else unsigned),         # 0.1W      Signed int positive discharge, negative battery charge power
             "Batovercharge": float(row.registers[80]),          # 0 no, 1 yes
             "Mpptfanspeed": float(row.registers[81]),           # 1%        Fan speed of MPPT Charger
             "Invfanspeed": float(row.registers[82]),            # 1%        Fan speed of Inverter
         }
-        if gwinfodump: print(info)
+        #if gwinfodump: print(info)
         return info
 
 # Do some shit
-
-print("Establishing connection to Influx..", end="")
-try:
-  influx = InfluxDBClient(host=influxhost, port=influxport,username=influxuser,password=influxpass,database=influxdbname)
-except:
-  print("Failed")
-  exit()
-else:
-  print("Done!")
-
-print("Creating Influx Database ",influxdbname," ..", end="")
-try:
-    influx.create_database(influxdbname)
-except:
-  print("Failed")
-  exit()
-else:
-  print("Done!")
 
 print("Connecting to Inverter..", end="")
 try:
@@ -183,7 +168,6 @@ except:
   print("Failed")
 else:
  print("Done!")
-
 
 
 print("Loading inverters.. ", end="")
@@ -196,7 +180,7 @@ for i in range(numinverters):
   unit=i+1
   name = "Growatt"+str(unit)
   measurement=influxmeasurement+str(unit)
-  print("Name ",name," unit is ",unit," measurement is ",measurement)
+  #print("Name ",name," unit is ",unit," measurement is ",measurement)
   growatt = Growatt(client, name, unit)
   inverters.append({
     'growatt': growatt,
@@ -215,16 +199,14 @@ while True:
             if info is None:
                 continue
 
-            if verbose: print("CHECK4")
+            if verbose: print("Collecting data point")
             points = [{
                 'time': int(now),
                 'measurement': inverter['measurement'],
                 "fields": info
             }]
-            if verbose: print("CHECK5")
-
-            if not influx.write_points(points, time_precision='s'):
-                print("Failed to write to DB!")
+            print(points)
+            print()
         except Exception as err:
             if verbose: print("ERRORHERE1")
             print(err)
